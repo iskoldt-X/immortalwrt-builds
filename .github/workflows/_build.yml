@@ -205,6 +205,7 @@ jobs:
         ls -la "$GITHUB_WORKSPACE/files/usr/bin/xray"
 
     - name: Load custom configuration
+      id: config
       run: |
         set -euo pipefail
         # NOTE: do NOT use `[ -e X ] && cp X Y` here. Under `bash -e`, a failing test
@@ -231,6 +232,17 @@ jobs:
           || { echo "::error::defconfig lost ${{ inputs.target_assert }}"; exit 1; }
         grep -qx '${{ inputs.package_assert }}' .config \
           || { echo "::error::defconfig lost ${{ inputs.package_assert }}"; exit 1; }
+        # ccache is opt-in per device config. CONFIG_CCACHE only has a prompt when
+        # CONFIG_DEVEL=y, so without DEVEL defconfig drops it without a word and the
+        # build silently runs uncached.
+        if grep -qx 'CONFIG_CCACHE=y' "$CFG"; then
+          grep -qx 'CONFIG_CCACHE=y' .config \
+            || { echo "::error::defconfig lost CONFIG_CCACHE=y (is CONFIG_DEVEL=y set?)"; exit 1; }
+          echo "ccache=true" >> "$GITHUB_OUTPUT"
+          # Part of the cache key: a toolchain change starts a fresh cache instead of
+          # reusing objects built by a compiler that may differ under the same version.
+          echo "toolchain=$(git log -1 --format=%h -- toolchain include/toolchain-build.mk)" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Download packages
       run: |
@@ -241,11 +253,59 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
+    - name: Restore compiler cache
+      id: ccache_restore
+      if: steps.config.outputs.ccache == 'true'
+      uses: actions/cache/restore@v5
+      with:
+        path: /workdir/openwrt/.ccache
+        key: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}
+        restore-keys: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-
+
+    - name: Configure ccache
+      if: steps.config.outputs.ccache == 'true'
+      run: |
+        set -euo pipefail
+        mkdir -p /workdir/openwrt/.ccache
+        # compiler_check: the cross gcc is rebuilt on every run, and its version
+        # string embeds the source revision (PKGVERSION in toolchain/gcc/common.mk).
+        # The default mtime check, and the content or -v checks, would therefore
+        # miss on every target object. Machine plus version is stable week to week;
+        # the toolchain hash in the cache key covers changes underneath it.
+        # max_size: some trees export CCACHE_NOCOMPRESS, so leave room on disk.
+        cat > /workdir/openwrt/.ccache/ccache.conf <<'EOF'
+        max_size = 5G
+        compiler_check = %compiler% -dumpmachine; %compiler% -dumpversion
+        EOF
+        CCACHE_DIR=/workdir/openwrt/.ccache ccache -z
+
     - name: Compile the firmware
+      # With ccache on, stop short of the 6-hour job limit so the cache still gets
+      # saved: a cold first run can run long, and a job killed at the limit saves
+      # nothing, which would leave every following run cold as well.
+      timeout-minutes: ${{ steps.config.outputs.ccache == 'true' && 300 || 360 }}
       run: |
         cd openwrt
         echo "$(nproc) thread compile"
         make -j"$(nproc)" || make -j1 || make -j1 V=s
+
+    - name: Show ccache statistics
+      if: always() && steps.ccache_restore.outcome == 'success'
+      run: |
+        # Prefer the ccache the tree built for itself; it wrote most of the entries.
+        CC=/workdir/openwrt/staging_dir/host/bin/ccache
+        [ -x "$CC" ] || CC=ccache
+        CCACHE_DIR=/workdir/openwrt/.ccache "$CC" -s || true
+        du -sh /workdir/openwrt/.ccache || true
+
+    - name: Save compiler cache
+      # Saved even when the compile failed or timed out: a partial cache still
+      # moves the next run further along.
+      if: always() && steps.ccache_restore.outcome == 'success'
+      uses: actions/cache/save@v5
+      with:
+        path: /workdir/openwrt/.ccache
+        key: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}
 
     - name: Check space usage
       if: (!cancelled())
