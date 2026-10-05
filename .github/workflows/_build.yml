@@ -134,6 +134,8 @@ jobs:
       run: |
         set -euo pipefail
         sudo chown -R "$USER":"$GROUPS" /workdir
+        # Scratch space for actions/cache archives (see the cache steps below).
+        mkdir -p /workdir/.cache-tmp
         df -hT /workdir
 
     - name: Clone source code
@@ -276,6 +278,12 @@ jobs:
       id: gocache_restore
       if: inputs.go_speedups
       uses: actions/cache/restore@v5
+      env:
+        # actions/cache builds its archive under RUNNER_TEMP, which lives on the
+        # root filesystem; maximize-build-space leaves only root-reserve-mb there.
+        # The Go cache archive did not fit ("No space left on device", reported
+        # only as a warning), so point it at the build mount instead.
+        RUNNER_TEMP: /workdir/.cache-tmp
       with:
         path: |
           /workdir/openwrt/tmp/go-build
@@ -308,6 +316,12 @@ jobs:
       id: ccache_restore
       if: steps.config.outputs.ccache == 'true'
       uses: actions/cache/restore@v5
+      env:
+        # actions/cache builds its archive under RUNNER_TEMP, which lives on the
+        # root filesystem; maximize-build-space leaves only root-reserve-mb there.
+        # The Go cache archive did not fit ("No space left on device", reported
+        # only as a warning), so point it at the build mount instead.
+        RUNNER_TEMP: /workdir/.cache-tmp
       with:
         path: /workdir/openwrt/.ccache
         key: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}
@@ -354,6 +368,12 @@ jobs:
       # moves the next run further along.
       if: always() && steps.ccache_restore.outcome == 'success'
       uses: actions/cache/save@v5
+      env:
+        # actions/cache builds its archive under RUNNER_TEMP, which lives on the
+        # root filesystem; maximize-build-space leaves only root-reserve-mb there.
+        # The Go cache archive did not fit ("No space left on device", reported
+        # only as a warning), so point it at the build mount instead.
+        RUNNER_TEMP: /workdir/.cache-tmp
       with:
         path: /workdir/openwrt/.ccache
         key: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}
@@ -361,6 +381,12 @@ jobs:
     - name: Save Go cache
       if: always() && steps.gocache_restore.outcome == 'success'
       uses: actions/cache/save@v5
+      env:
+        # actions/cache builds its archive under RUNNER_TEMP, which lives on the
+        # root filesystem; maximize-build-space leaves only root-reserve-mb there.
+        # The Go cache archive did not fit ("No space left on device", reported
+        # only as a warning), so point it at the build mount instead.
+        RUNNER_TEMP: /workdir/.cache-tmp
       with:
         path: |
           /workdir/openwrt/tmp/go-build
