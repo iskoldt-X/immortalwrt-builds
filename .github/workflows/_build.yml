@@ -52,6 +52,11 @@ on:
         description: Release tag prefix. Also names the artifact and groups the releases for pruning.
         required: true
         type: string
+      go_speedups:
+        description: Bootstrap host Go from the runner's Go instead of building the go1.4 chain, and cache Go builds.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # publish releases, delete old tags
@@ -204,6 +209,17 @@ jobs:
         echo "xray ${VER} (${ASSET})" >> "$GITHUB_STEP_SUMMARY"
         ls -la "$GITHUB_WORKSPACE/files/usr/bin/xray"
 
+    - name: Set up a host Go for bootstrapping
+      # The feeds otherwise compile Go from go1.4 through several intermediate
+      # releases just to obtain a compiler that can build the real one. Since Go
+      # 1.21 the toolchain is reproducible whatever bootstraps it, so this changes
+      # nothing in the image. "stable" is always new enough to bootstrap the feed.
+      if: inputs.go_speedups
+      uses: actions/setup-go@v6
+      with:
+        go-version: stable
+        cache: false
+
     - name: Load custom configuration
       id: config
       run: |
@@ -225,7 +241,17 @@ jobs:
           mkdir -p files
           cp -a "$GITHUB_WORKSPACE/files/." files/
         fi
+        if [ "${{ inputs.go_speedups }}" = "true" ]; then
+          GOROOT_HOST=$(go env GOROOT)
+          echo "CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT=\"${GOROOT_HOST}\"" >> .config
+          # Only some golang feeds have this switch; defconfig ignores it elsewhere.
+          echo '# CONFIG_GOLANG_BUILD_BOOTSTRAP is not set' >> .config
+        fi
         make defconfig
+        if [ "${{ inputs.go_speedups }}" = "true" ]; then
+          grep -qx "CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT=\"${GOROOT_HOST}\"" .config \
+            || { echo "::error::defconfig lost CONFIG_GOLANG_EXTERNAL_BOOTSTRAP_ROOT"; exit 1; }
+        fi
         # Guard against a silently emptied config: if the target or a signature
         # package vanished, stop now rather than shipping a stock image.
         grep -qx '${{ inputs.target_assert }}' .config \
@@ -243,6 +269,31 @@ jobs:
           # reusing objects built by a compiler that may differ under the same version.
           echo "toolchain=$(git log -1 --format=%h -- toolchain include/toolchain-build.mk)" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Restore Go cache
+      # Before the download step, so the module cache does not land on top of
+      # read-only directories that `make download` may already have created.
+      id: gocache_restore
+      if: inputs.go_speedups
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          /workdir/openwrt/tmp/go-build
+          /workdir/openwrt/dl/go-mod-cache
+        key: gocache-${{ inputs.tag_prefix }}-${{ github.run_id }}
+        restore-keys: gocache-${{ inputs.tag_prefix }}-
+
+    - name: Mark the Go build cache as recently used
+      # Go deletes build-cache entries it has not used for 5 days (trimLimit in
+      # cmd/go/internal/cache, not configurable). It reads "last used" from each
+      # file's mtime, and the restore keeps the old mtimes, so a weekly build would
+      # see everything as stale and wipe it on the first go command. Resetting the
+      # mtimes keeps the cache whatever the gap between runs; entries are content
+      # addressed, so the timestamp has no bearing on correctness.
+      if: steps.gocache_restore.outputs.cache-matched-key != ''
+      run: |
+        find /workdir/openwrt/tmp/go-build -type f -exec touch -c {} +
+        du -sh /workdir/openwrt/tmp/go-build /workdir/openwrt/dl/go-mod-cache || true
 
     - name: Download packages
       run: |
@@ -306,6 +357,15 @@ jobs:
       with:
         path: /workdir/openwrt/.ccache
         key: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}
+
+    - name: Save Go cache
+      if: always() && steps.gocache_restore.outcome == 'success'
+      uses: actions/cache/save@v5
+      with:
+        path: |
+          /workdir/openwrt/tmp/go-build
+          /workdir/openwrt/dl/go-mod-cache
+        key: gocache-${{ inputs.tag_prefix }}-${{ github.run_id }}
 
     - name: Check space usage
       if: (!cancelled())

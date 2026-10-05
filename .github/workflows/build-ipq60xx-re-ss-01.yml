@@ -20,3 +20,4 @@ jobs:
       xray_arch: aarch64
       golang_feed: false
       tag_prefix: ImmortalWrt-RE-SS-01
+      go_speedups: true
