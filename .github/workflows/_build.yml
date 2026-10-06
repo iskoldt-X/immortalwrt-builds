@@ -122,12 +122,10 @@ jobs:
       uses: easimon/maximize-build-space@v10
       with:
         build-mount-path: '/workdir'
-        # actions/cache writes its archive to RUNNER_TEMP on the root fs (a step-level
-        # RUNNER_TEMP override is ignored by the runner), so the reserve must hold the
-        # largest cache archive on top of what the job itself writes there. At 5120
-        # the Go cache save failed with "No space left on device" (warning only).
-        # The build mount peaks at ~37G of ~100G, so it can spare this.
-        root-reserve-mb: 16384
+        # Raising this does not leave more room on /: on current runners /mnt is the
+        # same filesystem, and the second (temp) loop PV then takes everything down to
+        # temp-reserve-mb anyway. Room for cache archives is made in the next step.
+        root-reserve-mb: 5120
         swap-size-mb: 1
         remove-dotnet: 'true'
         remove-android: 'true'
@@ -140,6 +138,21 @@ jobs:
         set -euo pipefail
         sudo chown -R "$USER":"$GROUPS" /workdir
         df -hT /workdir
+
+    - name: Make room on the root filesystem for cache archives
+      # actions/cache builds its archive under RUNNER_TEMP on / (a step-level
+      # RUNNER_TEMP override is ignored), and maximize-build-space leaves only ~100MB
+      # there, so the Go cache save failed with "No space left on device" (reported
+      # only as a warning). Space freed AFTER the LVM is built stays on /, so drop
+      # preinstalled toolchains this build never uses. setup-go runs later and puts
+      # its Go back under /opt/hostedtoolcache.
+      run: |
+        df -h /
+        sudo du -sh /opt/hostedtoolcache /usr/lib/jvm /usr/share/swift /usr/local/share/powershell \
+          /usr/local/lib/node_modules /opt/microsoft /opt/google 2>/dev/null || true
+        sudo rm -rf /opt/hostedtoolcache/* /usr/lib/jvm /usr/share/swift /usr/local/share/powershell \
+          /usr/local/lib/node_modules /opt/microsoft /opt/google
+        df -h /
 
     - name: Clone source code
       working-directory: /workdir
