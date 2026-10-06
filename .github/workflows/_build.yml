@@ -431,15 +431,26 @@ jobs:
         delete_workflow_pattern: ${{ github.workflow }}
 
     - name: Prune old releases
-      # Pinned to v2 on purpose: the v3 tag ships no node_modules, so it dies with
-      # "Cannot find module '@actions/core'" before it does anything. Same inputs.
-      uses: freenet-actions/delete-old-releases@v2
-      with:
-        # Scoped to this device's own tags. Without it the action deletes every
-        # release in the repository by age, so one device's weekly build would take
-        # another device's manually built firmware down with it.
-        regex: '^(?<group>${{ inputs.tag_prefix }})-[0-9]{12}$'
-        keep-latest-releases: 'true'
-        max-age: 'P30D'
-        delete-tags: true
-        token: ${{ github.token }}
+      # Plain gh instead of freenet-actions/delete-old-releases: its v2 targets the
+      # deprecated Node 20, and every v3 tag (Node 24) still ships without
+      # node_modules, so it dies with "Cannot find module '@actions/core'".
+      # Same policy as before: only this device's own tags (PREFIX-YYYYmmddHHMM;
+      # other devices' releases are never touched), always keep the newest one,
+      # delete the rest once they are older than 30 days, tags included.
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PREFIX: ${{ inputs.tag_prefix }}
+      run: |
+        set -euo pipefail
+        cutoff=$(date -u -d '30 days ago' +%s)
+        gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName,createdAt \
+          --jq '[.[] | select(.tagName | test("^" + env.PREFIX + "-[0-9]{12}$"))]
+                | sort_by(.createdAt) | reverse | .[1:][]
+                | select((.createdAt | fromdateiso8601) < '"$cutoff"') | .tagName' \
+          > /tmp/prune.txt
+        echo "releases to prune: $(wc -l < /tmp/prune.txt)"
+        while read -r tag; do
+          [ -n "$tag" ] || continue
+          echo "deleting $tag"
+          gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+        done < /tmp/prune.txt
