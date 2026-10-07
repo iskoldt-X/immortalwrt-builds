@@ -1,0 +1,47 @@
+# GitHub deletes cache entries that nobody has read for 7 days. The builds run
+# weekly and save at the end of a run, so next week's restore lands just under
+# 7 days later, give or take how long the scheduler sat on each run (6-7 hours
+# here, varying week to week). One late Monday and a device starts cold.
+# Restoring every cache once midweek resets that clock.
+#
+# Paths must match _build.yml exactly: they are part of the cache version, and a
+# restore with different paths finds nothing.
+
+name: Keep caches warm
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 4 * * 4"
+
+permissions: {}
+
+jobs:
+  touch:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        tag_prefix:
+          - ImmortalWrt-x86-64
+          - ImmortalWrt-RE-CP-03
+          - ImmortalWrt-RE-SS-01
+    steps:
+    - name: Make the cache paths writable
+      run: sudo install -d -o "$USER" /workdir/openwrt
+
+    - name: Read the compiler cache
+      uses: actions/cache/restore@v5
+      with:
+        path: /workdir/openwrt/.ccache
+        key: ccache-${{ matrix.tag_prefix }}-keepalive
+        restore-keys: ccache-${{ matrix.tag_prefix }}-
+
+    - name: Read the Go cache
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          /workdir/openwrt/tmp/go-build
+          /workdir/openwrt/dl/go-mod-cache
+        key: gocache-v2-${{ matrix.tag_prefix }}-keepalive
+        restore-keys: gocache-v2-${{ matrix.tag_prefix }}-
