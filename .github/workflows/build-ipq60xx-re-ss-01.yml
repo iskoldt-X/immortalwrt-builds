@@ -3,7 +3,7 @@ name: Build ImmortalWrt ipq60xx RE-SS-01
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 5 * * 1"
+    - cron: "23 5 * * 1"
 
 jobs:
   build:

@@ -3,8 +3,9 @@ name: Build ImmortalWrt filogic RE-CP-03
 on:
   workflow_dispatch:
   schedule:
-    # Staggered so the three builds do not clone and fetch at the same minute.
-    - cron: "0 4 * * 1"
+    # Staggered so the three builds do not clone and fetch at the same minute, and
+    # off the top of the hour, when GitHub queues scheduled runs the longest.
+    - cron: "23 4 * * 1"
 
 jobs:
   build:
