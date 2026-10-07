@@ -298,8 +298,9 @@ jobs:
         path: |
           /workdir/openwrt/tmp/go-build
           /workdir/openwrt/dl/go-mod-cache
-        key: gocache-${{ inputs.tag_prefix }}-${{ github.run_id }}
-        restore-keys: gocache-${{ inputs.tag_prefix }}-
+        key: gocache-v2-${{ inputs.tag_prefix }}-${{ github.run_id }}
+        # v2: entries before this fix may hold a module cache with small files purged.
+        restore-keys: gocache-v2-${{ inputs.tag_prefix }}-
 
     - name: Mark the Go build cache as recently used
       # Go deletes build-cache entries it has not used for 5 days (trimLimit in
@@ -319,8 +320,11 @@ jobs:
         cd openwrt
         make download -j8
         # A truncated download shows up as a tiny file; drop it so make refetches.
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        # Skip the Go module cache: it is restored from cache before this step and is
+        # full of legitimately small source files. Purging it once deleted 9288 of
+        # them and broke a later go:embed ("editions_defaults.binpb: no matching files").
+        find dl -path dl/go-mod-cache -prune -o -type f -size -1024c -exec ls -l {} \;
+        find dl -path dl/go-mod-cache -prune -o -type f -size -1024c -exec rm -f {} \;
 
     - name: Restore compiler cache
       id: ccache_restore
@@ -387,7 +391,7 @@ jobs:
         path: |
           /workdir/openwrt/tmp/go-build
           /workdir/openwrt/dl/go-mod-cache
-        key: gocache-${{ inputs.tag_prefix }}-${{ github.run_id }}
+        key: gocache-v2-${{ inputs.tag_prefix }}-${{ github.run_id }}
 
     - name: Check space usage
       if: (!cancelled())
