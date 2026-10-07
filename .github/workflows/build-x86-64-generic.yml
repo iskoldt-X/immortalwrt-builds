@@ -19,3 +19,4 @@ jobs:
       xray_runnable: true
       golang_feed: true
       tag_prefix: ImmortalWrt-x86-64
+      go_speedups: true
