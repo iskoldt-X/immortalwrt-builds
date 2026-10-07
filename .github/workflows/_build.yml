@@ -372,6 +372,7 @@ jobs:
         du -sh /workdir/openwrt/.ccache || true
 
     - name: Save compiler cache
+      id: ccache_save
       # Saved even when the compile failed or timed out: a partial cache still
       # moves the next run further along.
       if: always() && steps.ccache_restore.outcome == 'success'
@@ -385,6 +386,7 @@ jobs:
       run: du -sh /workdir/openwrt/tmp/go-build /workdir/openwrt/dl/go-mod-cache || true
 
     - name: Save Go cache
+      id: gocache_save
       if: always() && steps.gocache_restore.outcome == 'success'
       uses: actions/cache/save@v5
       with:
@@ -392,6 +394,41 @@ jobs:
           /workdir/openwrt/tmp/go-build
           /workdir/openwrt/dl/go-mod-cache
         key: gocache-v2-${{ inputs.tag_prefix }}-${{ github.run_id }}
+
+    - name: Drop superseded caches
+      # Cache entries are immutable, so every run saves under a fresh key and the
+      # old ones pile up. Past the 10 GB repo quota GitHub evicts the least
+      # recently used entries, which tend to be the caches of the devices built
+      # less often. Keep only the newest entry per prefix, and only once the new
+      # entry is confirmed to exist: a failed save is just a warning and leaves
+      # the step green. Housekeeping only, so it never blocks the release.
+      if: always()
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        drop_superseded() {
+          local prefix=$1 keep=$2
+          if ! gh cache list --repo "$GITHUB_REPOSITORY" --key "$keep" --json key \
+              --jq '.[].key' | grep -qxF "$keep"; then
+            echo "Keeping the old $prefix entries: $keep was not saved"
+            return 0
+          fi
+          gh cache list --repo "$GITHUB_REPOSITORY" --key "$prefix" --limit 100 \
+              --json id,key --jq ".[] | select(.key != \"$keep\") | .id" |
+          while read -r id; do
+            echo "Deleting cache entry $id"
+            gh cache delete "$id" --repo "$GITHUB_REPOSITORY"
+          done
+        }
+        if [ "${{ steps.ccache_save.outcome }}" = success ]; then
+          drop_superseded "ccache-${{ inputs.tag_prefix }}-" \
+            "ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}"
+        fi
+        if [ "${{ steps.gocache_save.outcome }}" = success ]; then
+          drop_superseded "gocache-v2-${{ inputs.tag_prefix }}-" \
+            "gocache-v2-${{ inputs.tag_prefix }}-${{ github.run_id }}"
+        fi
 
     - name: Check space usage
       if: (!cancelled())
