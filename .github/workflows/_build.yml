@@ -302,16 +302,23 @@ jobs:
         # v2: entries before this fix may hold a module cache with small files purged.
         restore-keys: gocache-v2-${{ inputs.tag_prefix }}-
 
-    - name: Mark the Go build cache as recently used
-      # Go deletes build-cache entries it has not used for 5 days (trimLimit in
-      # cmd/go/internal/cache, not configurable). It reads "last used" from each
-      # file's mtime, and the restore keeps the old mtimes, so a weekly build would
-      # see everything as stale and wipe it on the first go command. Resetting the
-      # mtimes keeps the cache whatever the gap between runs; entries are content
-      # addressed, so the timestamp has no bearing on correctness.
+    - name: Backdate the Go build cache
+      # Go keeps "last used" in each entry's mtime: it bumps the mtime whenever it
+      # reads an entry whose mtime is over an hour old, and deletes entries unused
+      # for 5 days (trimLimit in cmd/go/internal/cache, not configurable). The
+      # restore keeps last week's mtimes, so a weekly build would see everything
+      # as stale and wipe it. Backdate every entry by 2 hours instead: young enough
+      # to survive Go's trim, old enough that Go bumps each entry it actually reads.
+      # The marker records the cut-off for the sweep after the compile.
+      # Entries are <xx>/<hash>-a and <hash>-d, where a -d may be a directory (a
+      # cached executable); Go looks at the entry itself, not at what is inside.
+      id: gocache_age
       if: steps.gocache_restore.outputs.cache-matched-key != ''
       run: |
-        find /workdir/openwrt/tmp/go-build -type f -exec touch -c {} +
+        set -euo pipefail
+        find /workdir/openwrt/tmp/go-build -mindepth 2 -maxdepth 2 \
+          \( -name '*-a' -o -name '*-d' \) -exec touch -c -d '2 hours ago' {} +
+        touch /workdir/gocache.mark
         du -sh /workdir/openwrt/tmp/go-build /workdir/openwrt/dl/go-mod-cache || true
 
     - name: Download packages
@@ -353,6 +360,7 @@ jobs:
         CCACHE_DIR=/workdir/openwrt/.ccache ccache -z
 
     - name: Compile the firmware
+      id: compile
       # With ccache on, stop short of the 6-hour job limit so the cache still gets
       # saved: a cold first run can run long, and a job killed at the limit saves
       # nothing, which would leave every following run cold as well.
@@ -381,9 +389,34 @@ jobs:
         path: /workdir/openwrt/.ccache
         key: ccache-${{ inputs.tag_prefix }}-${{ steps.config.outputs.toolchain }}-${{ github.run_id }}
 
-    - name: Show Go cache size
+    - name: Trim the Go cache to what this build used
+      # Without this the cache only grows: every package or Go upgrade leaves
+      # entries nothing will read again, and the backdating above keeps Go from
+      # ever trimming them. Entries still at or before the marker were not read by
+      # this build, so drop them. Only after a successful compile, since a build
+      # that stopped halfway has not yet read what the rest of it needs.
+      # The module cache has no usage tracking (Go never touches those files), but
+      # it grows slowly; past a cap it is dropped and fetched afresh next run.
       if: always() && steps.gocache_restore.outcome == 'success'
-      run: du -sh /workdir/openwrt/tmp/go-build /workdir/openwrt/dl/go-mod-cache || true
+      run: |
+        set -euo pipefail
+        cd /workdir/openwrt
+        du -sh tmp/go-build dl/go-mod-cache || true
+        if [ "${{ steps.compile.outcome }}" = success ] && [ -e /workdir/gocache.mark ]; then
+          find tmp/go-build -mindepth 2 -maxdepth 2 \( -name '*-a' -o -name '*-d' \) \
+            ! -newer /workdir/gocache.mark > /tmp/go-unused.txt
+          echo "Dropping $(wc -l < /tmp/go-unused.txt) Go build cache entries this build did not use"
+          xargs -r -d '\n' rm -rf < /tmp/go-unused.txt
+        fi
+        if [ -d dl/go-mod-cache ]; then
+          mod_mb=$(du -sm dl/go-mod-cache | cut -f1)
+          if [ "$mod_mb" -gt 1536 ]; then
+            echo "Go module cache is ${mod_mb} MB, over the 1536 MB cap; not keeping it"
+            chmod -R u+w dl/go-mod-cache
+            rm -rf dl/go-mod-cache
+          fi
+        fi
+        du -sh tmp/go-build dl/go-mod-cache || true
 
     - name: Save Go cache
       id: gocache_save
