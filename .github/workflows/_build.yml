@@ -176,6 +176,33 @@ jobs:
           ./scripts/feeds install -p golang golang
         fi
 
+    - name: Backfill core packages the tree has in neither place
+      # On 2026-10-19 immortalwrt moved libffi from the packages feed into the core
+      # tree. A fork that last synced core before that (VIKINGYFY, synced 2026-10-10)
+      # but pulls the packages feed from master ends up with libffi in neither, and
+      # python3 then fails building _ctypes on a missing ffi.h. Copy the package in
+      # from immortalwrt master only when both places lack it, so trees that still
+      # carry it in the feed (24.10) or have synced core skip this untouched.
+      run: |
+        set -euo pipefail
+        cd openwrt
+        for pkg in libs/libffi; do
+          name=${pkg##*/}
+          if [ -d "package/$pkg" ] || [ -e "package/feeds/packages/$name" ]; then
+            echo "$name: present, nothing to do"
+            continue
+          fi
+          echo "$name: missing from core and feed, copying from immortalwrt master"
+          rm -rf /tmp/iw-core
+          git clone --depth 1 --filter=blob:none --sparse -b master \
+            https://github.com/immortalwrt/immortalwrt /tmp/iw-core
+          git -C /tmp/iw-core sparse-checkout set "package/$pkg"
+          test -f "/tmp/iw-core/package/$pkg/Makefile"
+          mkdir -p "package/${pkg%/*}"
+          cp -a "/tmp/iw-core/package/$pkg" "package/$pkg"
+          echo "$name: copied at immortalwrt master $(git -C /tmp/iw-core rev-parse --short HEAD)"
+        done
+
     - name: Fetch upstream Xray binary into files/
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
