@@ -511,16 +511,24 @@ jobs:
       # Same policy as before: only this device's own tags (PREFIX-YYYYmmddHHMM;
       # other devices' releases are never touched), always keep the newest one,
       # delete the rest once they are older than 30 days, tags included.
+      # Order comes from the tag's own timestamp and age from publishedAt, NOT
+      # createdAt: for a release, createdAt is the date of the tagged commit, so
+      # every release cut from an unchanged main looks as old as that commit. With
+      # createdAt the release this run had just published tied with the previous
+      # one, lost the tie, and was deleted at once (no releases 2026-10-12..11-13).
+      # The release from this run is also excluded by name, as a second guard.
       env:
         GH_TOKEN: ${{ github.token }}
         PREFIX: ${{ inputs.tag_prefix }}
+        CURRENT: ${{ steps.tag.outputs.release_tag }}
       run: |
         set -euo pipefail
         cutoff=$(date -u -d '30 days ago' +%s)
-        gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName,createdAt \
+        gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName,publishedAt \
           --jq '[.[] | select(.tagName | test("^" + env.PREFIX + "-[0-9]{12}$"))]
-                | sort_by(.createdAt) | reverse | .[1:][]
-                | select((.createdAt | fromdateiso8601) < '"$cutoff"') | .tagName' \
+                | sort_by(.tagName) | reverse | .[1:][]
+                | select(.tagName != env.CURRENT)
+                | select((.publishedAt | fromdateiso8601) < '"$cutoff"') | .tagName' \
           > /tmp/prune.txt
         echo "releases to prune: $(wc -l < /tmp/prune.txt)"
         while read -r tag; do
