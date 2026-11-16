@@ -1,8 +1,8 @@
 # Shared build pipeline.
 #
-# The three build-*.yml files next to this one are thin callers that supply only
+# The build-*.yml files next to this one are thin callers that supply only
 # the parameters below; every actual step lives here, so a fix lands in one place
-# instead of being copied three times and drifting.
+# instead of being copied into every caller and drifting.
 
 name: build
 

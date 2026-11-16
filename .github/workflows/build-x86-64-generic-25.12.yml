@@ -1,0 +1,26 @@
+name: Build ImmortalWrt 25.12 x86-64 generic
+
+# Parallel track on the openwrt-25.12 branch (kernel 6.12, apk instead of opkg).
+# Runs next to the 24.10 build and replaces nothing; same device config.
+# The tag prefix must not start with the 24.10 one (ImmortalWrt-x86-64), or the
+# prefix-matched cache restore keys and release pruning would mix the two tracks.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 6 * * 1"
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      source_url: https://github.com/immortalwrt/immortalwrt
+      source_branch: openwrt-25.12
+      config_file: x86-64-generic.config
+      target_assert: CONFIG_TARGET_x86_64=y
+      xray_asset: Xray-linux-64.zip
+      xray_arch: x86-64
+      xray_runnable: true
+      golang_feed: true
+      tag_prefix: ImmortalWrt-25.12-x86-64
+      go_speedups: true

@@ -1,0 +1,25 @@
+name: Build ImmortalWrt 25.12 filogic RE-CP-03
+
+# Parallel track on the openwrt-25.12 branch (kernel 6.12, apk instead of opkg).
+# Runs next to the 24.10 build and replaces nothing; same device config.
+# The tag prefix must not start with the 24.10 one (ImmortalWrt-RE-CP-03), or the
+# prefix-matched cache restore keys and release pruning would mix the two tracks.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 7 * * 1"
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      source_url: https://github.com/immortalwrt/immortalwrt
+      source_branch: openwrt-25.12
+      config_file: filogic-re-cp-03.config
+      target_assert: CONFIG_TARGET_mediatek_filogic=y
+      xray_asset: Xray-linux-arm64-v8a.zip
+      xray_arch: aarch64
+      golang_feed: true
+      tag_prefix: ImmortalWrt-25.12-RE-CP-03
+      go_speedups: true
