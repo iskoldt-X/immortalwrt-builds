@@ -23,3 +23,6 @@ jobs:
       golang_feed: true
       tag_prefix: ImmortalWrt-25.12-RE-CP-03
       go_speedups: true
+      # 25.12 pulls LuCI in through the `luci` meta package; a config that unsets it
+      # builds fine but ships without uhttpd or the web UI. Fail instead.
+      extra_assert: CONFIG_PACKAGE_uhttpd=y

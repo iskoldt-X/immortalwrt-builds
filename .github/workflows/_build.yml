@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: CONFIG_PACKAGE_luci-app-openclash=y
+      extra_assert:
+        description: Optional third line that must survive, e.g. the web server on a tree whose defaults differ.
+        required: false
+        type: string
+        default: ''
       xray_asset:
         description: Upstream Xray release asset for this architecture.
         required: true
@@ -303,6 +308,10 @@ jobs:
           || { echo "::error::defconfig lost ${{ inputs.target_assert }}"; exit 1; }
         grep -qx '${{ inputs.package_assert }}' .config \
           || { echo "::error::defconfig lost ${{ inputs.package_assert }}"; exit 1; }
+        if [ -n '${{ inputs.extra_assert }}' ]; then
+          grep -qx '${{ inputs.extra_assert }}' .config \
+            || { echo "::error::defconfig lost ${{ inputs.extra_assert }}"; exit 1; }
+        fi
         # ccache is opt-in per device config. CONFIG_CCACHE only has a prompt when
         # CONFIG_DEVEL=y, so without DEVEL defconfig drops it without a word and the
         # build silently runs uncached.
