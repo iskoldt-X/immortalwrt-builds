@@ -1,6 +1,6 @@
 # immortalwrt-builds
 
-ImmortalWrt firmware builds for three devices, built on GitHub Actions.
+ImmortalWrt firmware builds for four devices, built on GitHub Actions.
 
 [![x86-64](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-x86-64-generic.yml/badge.svg)](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-x86-64-generic.yml)
 [![RE-CP-03](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-filogic-re-cp-03.yml/badge.svg)](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-filogic-re-cp-03.yml)
@@ -8,20 +8,24 @@ ImmortalWrt firmware builds for three devices, built on GitHub Actions.
 
 ## Builds
 
-| Workflow | Target | Source tree | Config | Release tag |
-| --- | --- | --- | --- | --- |
-| `build-x86-64-generic.yml` | `x86/64` generic | `immortalwrt/immortalwrt` `openwrt-24.10` | `x86-64-generic.config` | `ImmortalWrt-x86-64-*` |
-| `build-filogic-re-cp-03.yml` | `mediatek/filogic`, JDCloud RE-CP-03 | `immortalwrt/immortalwrt` `openwrt-24.10` | `filogic-re-cp-03.config` | `ImmortalWrt-RE-CP-03-*` |
-| `build-ipq60xx-re-ss-01.yml` | `qualcommax/ipq60xx`, JDCloud RE-SS-01 | `VIKINGYFY/immortalwrt` `main` | `ipq60xx-re-ss-01.config` | `ImmortalWrt-RE-SS-01-*` |
+| Workflow | Target | Source tree | Config | Release tag | Schedule |
+| --- | --- | --- | --- | --- | --- |
+| `build-x86-64-generic-25.12.yml` | `x86/64` generic | `immortalwrt/immortalwrt` `openwrt-25.12` | `x86-64-generic.config` | `ImmortalWrt-25.12-x86-64-*` | Monday 06:23 UTC |
+| `build-filogic-re-cp-03-25.12.yml` | `mediatek/filogic`, JDCloud RE-CP-03 | `immortalwrt/immortalwrt` `openwrt-25.12` | `filogic-re-cp-03.config` | `ImmortalWrt-25.12-RE-CP-03-*` | Monday 07:23 UTC |
+| `build-ipq60xx-re-ss-01.yml` | `qualcommax/ipq60xx`, JDCloud RE-SS-01 | `VIKINGYFY/immortalwrt` `main` | `ipq60xx-re-ss-01.config` | `ImmortalWrt-RE-SS-01-*` | Monday 05:23 UTC |
+| `build-filogic-tl-7dr7230-v1-master.yml` | `mediatek/filogic`, TP-Link TL-7DR7230 v1 | `immortalwrt/immortalwrt` `master` | `filogic-tl-7dr7230-v1.config` | `ImmortalWrt-master-TL-7DR7230-v1-*` | manual only |
+| `build-x86-64-generic.yml` | `x86/64` generic | `immortalwrt/immortalwrt` `openwrt-24.10` | `x86-64-generic.config` | `ImmortalWrt-x86-64-*` | manual only (24.10 is end of life) |
+| `build-filogic-re-cp-03.yml` | `mediatek/filogic`, JDCloud RE-CP-03 | `immortalwrt/immortalwrt` `openwrt-24.10` | `filogic-re-cp-03.config` | `ImmortalWrt-RE-CP-03-*` | manual only (24.10 is end of life) |
 
-Each of the three files above only supplies parameters. Every build step lives
-in `_build.yml`, which they call through `workflow_call`, so a fix is made once
-rather than three times.
+Each workflow file above only supplies parameters. Every build step lives in
+`_build.yml`, which they call through `workflow_call`, so a fix is made once
+rather than once per device.
 
-All three run on `ubuntu-24.04`, can be started from the Actions tab, and are
-also built weekly on Monday (03:00, 04:00 and 05:00 UTC -- staggered so they do
-not all clone and fetch in the same minute). Each build uploads the firmware as
-a workflow artifact and publishes a release named after its tag.
+All of them run on `ubuntu-24.04` and can be started from the Actions tab. The
+scheduled ones are staggered an hour apart so they do not all clone and fetch in
+the same minute, and sit off the top of the hour, when GitHub queues scheduled
+runs the longest. Each build uploads the firmware as a workflow artifact and
+publishes a release named after its tag.
 
 Old releases are pruned per device: the newest release of each device is always
 kept, and the rest are removed after 30 days. Without that scoping the pruner
@@ -30,13 +34,13 @@ would take another device's firmware with it.
 
 ## Xray binary
 
-All three workflows download the official static `Xray-core` binary and place it
+All workflows download the official static `Xray-core` binary and place it
 at `/usr/bin/xray` inside the image, together with the version string at
 `/etc/xray.version`. The upstream binaries are built with `CGO_ENABLED=0`, so
 they run unmodified against musl. The archive checksum is verified against the
 published `.dgst` file and the architecture of the extracted binary is asserted
 before it is added to the image. The x86-64 build additionally executes the
-binary and asserts the version it reports; the two aarch64 builds cannot, since
+binary and asserts the version it reports; the aarch64 builds cannot, since
 the runner is x86-64.
 
 By default the workflows track the newest tag, including pre-releases. Note that
@@ -52,7 +56,7 @@ installs its own `/usr/bin/xray` and would overwrite the injected binary.
 
 ## Repository layout
 
-- `_build.yml` is the shared pipeline; the three `build-*.yml` files are callers.
+- `_build.yml` is the shared pipeline; the `build-*.yml` files are callers.
 - `*.config` are seed configs copied to `openwrt/.config`; `make defconfig`
   expands them. Two lines are asserted afterwards, the target and
   `luci-app-openclash`, so an emptied config fails the build instead of
