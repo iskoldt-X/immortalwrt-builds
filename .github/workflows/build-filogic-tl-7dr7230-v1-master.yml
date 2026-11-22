@@ -24,5 +24,7 @@ jobs:
       golang_feed: true
       tag_prefix: ImmortalWrt-master-TL-7DR7230-v1
       go_speedups: true
-      # master pulls LuCI in through the `luci` meta package; fail if the web UI is missing
+      # master no longer adds luci, autocore and luci-app-cpufreq by default (the
+      # DEFAULT_PACKAGES.tweak line in include/target.mk is commented out), so the
+      # config selects them; fail if the web UI is still missing
       extra_assert: CONFIG_PACKAGE_uhttpd=y
