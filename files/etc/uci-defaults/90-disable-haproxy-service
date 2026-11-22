@@ -1,0 +1,11 @@
+#!/bin/sh
+# haproxy is pulled in as a hard dependency of luci-app-passwall. Its package
+# also ships a standalone service that starts at boot with the upstream sample
+# /etc/haproxy.cfg, which listens on :81, :444 and :60000 and forwards to
+# placeholder backends. Nothing uses that service: when passwall's HAProxy
+# balancing is enabled, passwall starts its own haproxy process with a config it
+# generates under /tmp. Keep the binary, disable the standalone service.
+[ -x /etc/init.d/haproxy ] || exit 0
+/etc/init.d/haproxy stop >/dev/null 2>&1
+/etc/init.d/haproxy disable >/dev/null 2>&1
+exit 0
