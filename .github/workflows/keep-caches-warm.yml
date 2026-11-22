@@ -23,8 +23,6 @@ jobs:
       fail-fast: false
       matrix:
         tag_prefix:
-          - ImmortalWrt-x86-64
-          - ImmortalWrt-RE-CP-03
           - ImmortalWrt-RE-SS-01
           - ImmortalWrt-25.12-x86-64
           - ImmortalWrt-25.12-RE-CP-03

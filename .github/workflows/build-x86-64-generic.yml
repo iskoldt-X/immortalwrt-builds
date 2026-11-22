@@ -2,8 +2,9 @@ name: Build ImmortalWrt x86-64 generic
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "23 3 * * 1"
+  # 24.10 is end of life; manual runs only. The weekly schedule moved to the 25.12 workflow.
+  # schedule:
+  #   - cron: "23 3 * * 1"
 
 jobs:
   build:

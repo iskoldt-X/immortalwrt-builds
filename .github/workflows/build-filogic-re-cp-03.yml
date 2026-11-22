@@ -2,10 +2,9 @@ name: Build ImmortalWrt filogic RE-CP-03
 
 on:
   workflow_dispatch:
-  schedule:
-    # Staggered so the three builds do not clone and fetch at the same minute, and
-    # off the top of the hour, when GitHub queues scheduled runs the longest.
-    - cron: "23 4 * * 1"
+  # 24.10 is end of life; manual runs only. The weekly schedule moved to the 25.12 workflow.
+  # schedule:
+  #   - cron: "23 4 * * 1"
 
 jobs:
   build:
