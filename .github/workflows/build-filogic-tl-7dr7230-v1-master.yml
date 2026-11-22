@@ -1,0 +1,27 @@
+name: Build ImmortalWrt master filogic TL-7DR7230 v1
+
+# Built from master: only master carries the mt76 driver and MT7992 firmware
+# from 2026-10-28 (openwrt-25.12 is still on the 2026-03 driver).
+# Same package set as the RE-CP-03 config, without Docker for now (the device
+# has 128 MB of SPI-NAND; Docker is to be re-evaluated once the image size is known).
+# The tag prefix must not start with any other track's prefix (cache keys and
+# release pruning match by prefix).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      source_url: https://github.com/immortalwrt/immortalwrt
+      source_branch: master
+      config_file: filogic-tl-7dr7230-v1.config
+      target_assert: CONFIG_TARGET_mediatek_filogic_DEVICE_tplink_tl-7dr7230-v1=y
+      xray_asset: Xray-linux-arm64-v8a.zip
+      xray_arch: aarch64
+      golang_feed: true
+      tag_prefix: ImmortalWrt-master-TL-7DR7230-v1
+      go_speedups: true
+      # master pulls LuCI in through the `luci` meta package; fail if the web UI is missing
+      extra_assert: CONFIG_PACKAGE_uhttpd=y
