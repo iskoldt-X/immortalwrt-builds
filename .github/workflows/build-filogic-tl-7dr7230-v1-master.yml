@@ -10,6 +10,8 @@ name: Build ImmortalWrt master filogic TL-7DR7230 v1
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "23 8 * * 1"
 
 jobs:
   build:

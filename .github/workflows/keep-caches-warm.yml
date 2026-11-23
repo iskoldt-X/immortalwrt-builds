@@ -26,6 +26,7 @@ jobs:
           - ImmortalWrt-RE-SS-01
           - ImmortalWrt-25.12-x86-64
           - ImmortalWrt-25.12-RE-CP-03
+          - ImmortalWrt-master-TL-7DR7230-v1
     steps:
     - name: Make the cache paths writable
       run: sudo install -d -o "$USER" /workdir/openwrt

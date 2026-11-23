@@ -13,7 +13,7 @@ ImmortalWrt firmware builds for four devices, built on GitHub Actions.
 | `build-x86-64-generic-25.12.yml` | `x86/64` generic | `immortalwrt/immortalwrt` `openwrt-25.12` | `x86-64-generic.config` | `ImmortalWrt-25.12-x86-64-*` | Monday 06:23 UTC |
 | `build-filogic-re-cp-03-25.12.yml` | `mediatek/filogic`, JDCloud RE-CP-03 | `immortalwrt/immortalwrt` `openwrt-25.12` | `filogic-re-cp-03.config` | `ImmortalWrt-25.12-RE-CP-03-*` | Monday 07:23 UTC |
 | `build-ipq60xx-re-ss-01.yml` | `qualcommax/ipq60xx`, JDCloud RE-SS-01 | `VIKINGYFY/immortalwrt` `main` | `ipq60xx-re-ss-01.config` | `ImmortalWrt-RE-SS-01-*` | Monday 05:23 UTC |
-| `build-filogic-tl-7dr7230-v1-master.yml` | `mediatek/filogic`, TP-Link TL-7DR7230 v1 | `immortalwrt/immortalwrt` `master` | `filogic-tl-7dr7230-v1.config` | `ImmortalWrt-master-TL-7DR7230-v1-*` | manual only |
+| `build-filogic-tl-7dr7230-v1-master.yml` | `mediatek/filogic`, TP-Link TL-7DR7230 v1 | `immortalwrt/immortalwrt` `master` | `filogic-tl-7dr7230-v1.config` | `ImmortalWrt-master-TL-7DR7230-v1-*` | Monday 08:23 UTC |
 | `build-x86-64-generic.yml` | `x86/64` generic | `immortalwrt/immortalwrt` `openwrt-24.10` | `x86-64-generic.config` | `ImmortalWrt-x86-64-*` | manual only (24.10 is end of life) |
 | `build-filogic-re-cp-03.yml` | `mediatek/filogic`, JDCloud RE-CP-03 | `immortalwrt/immortalwrt` `openwrt-24.10` | `filogic-re-cp-03.config` | `ImmortalWrt-RE-CP-03-*` | manual only (24.10 is end of life) |
 
